@@ -53,28 +53,31 @@ def handle_request(request):
     head = request.split('\n')[0]
 
     if (is_valid_syntax(head)):
-        # print('valid syntax')
+        #print('valid syntax')
         if(is_supported(head)):
-            # print('is supported')
+            #print('is supported')
             if(has_valid_path(head)):
-                # print('Valid part')
+                #print('Valid part')
                 #accessing file:
                 file_path = './test.html'
-                file_last_modified = os.stat(file_path).st_mtime
+                file_last_modified = datetime.fromtimestamp(os.path.getmtime(file_path), tz=timezone.utc)
                 if(has_if_mod_since(request)):
-                    if_modified_since = head.split()[3].split(':')[1]
-                    client_time = datetime.strptime(if_modified_since, '%a, %d %b %Y %H:%M:%S GMT').timestamp()
-                    if client_time < file_last_modified:
-                        return ('HTTP/1.1 304 Not Modified\r\n\r\n')
-                else:
-                    code="200 OK"
-                    with open(file_path, 'r') as file:
-                        file_content = file.read()
-                    file_or_error = (f'Last Modified: {datetime.fromtimestamp(file_last_modified, tz=timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")}\r\n'
-                                     '\r\n'
-                                     f'{file_content}')
-                    return create_response(code, file_or_error)
-                    #print('return relevant repsponse for 200 OK')
+                    #print("has request")
+                    if_modified_since = request.split('\n')[4]
+                    if_modified_since = if_modified_since.replace('If-Modified-Since: ', '').strip()
+                    client_time = datetime.strptime(if_modified_since, '%a, %d %b %Y %H:%M:%S GMT').replace(tzinfo=timezone.utc)
+                    if client_time.timestamp() >= file_last_modified.timestamp():
+                        response = ('HTTP/1.1 304 Not Modified\r\n\r\n')
+                        return response
+                code="200 OK"
+                file_last_modified_str = file_last_modified.strftime("%a, %d %b %Y %H:%M:%S GMT")
+                with open(file_path, 'r') as file:
+                    file_content = file.read()
+                file_or_error = (f'Last Modified: {file_last_modified_str}\r\n'
+                                '\r\n'
+                                f'{file_content}')
+                return create_response(code, file_or_error)
+                #print('return relevant repsponse for 200 OK')
             else:
                 code="404 Not Found"
                 file_or_error = f'\r\n<html><body><h1>{code}</h1><p>The request could not be understood by the server due to malformed syntax.</p></body></html>'
