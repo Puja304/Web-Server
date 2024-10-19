@@ -1,8 +1,11 @@
 from socket import *
 import os
+from datetime import *
 
 methods_valid = ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS', 'PATCH', 'CONNECT', 'TRACE']
 methods_supported = ['GET', 'POST']
+
+
 
 serverPort = 8080
 serverSocket = socket(AF_INET, SOCK_STREAM)
@@ -12,7 +15,7 @@ serverSocket.listen(1)
 print('The server is ready to receive')
 
 def is_valid_syntax(head):
-    method, path, vers = head.split(" ")
+    method, path, vers = head.split()
     inMethods = method in methods_valid
     if (inMethods and path and vers.startswith('HTTP/')):
         return True
@@ -38,8 +41,15 @@ def has_if_mod_since(request):
         return True
     else:
         return False
+    
+def create_response(code, file_or_error):
+    return (f'HTTP/1.1 {code}\r\n'
+                    'Content-Type: text/html\r\n'
+                    f'{file_or_error}'
+                    ) 
 
 def handle_request(request):
+
     head = request.split('\n')[0]
 
     if (is_valid_syntax(head)):
@@ -48,27 +58,38 @@ def handle_request(request):
             # print('is supported')
             if(has_valid_path(head)):
                 # print('Valid part')
+                #accessing file:
+                file_path = './test.html'
+                file_last_modified = os.stat(file_path).st_mtime
                 if(has_if_mod_since(request)):
-                    print("run function to see if it has been modified")
-                    print('If not modified: return relevant response for  304 Not Modified')
+                    if_modified_since = head.split()[3].split(':')[1]
+                    client_time = datetime.strptime(if_modified_since, '%a, %d %b %Y %H:%M:%S GMT').timestamp()
+                    if client_time < file_last_modified:
+                        return ('HTTP/1.1 304 Not Modified\r\n\r\n')
                 else:
-                    response="200 OK"
-                    return
+                    code="200 OK"
+                    with open(file_path, 'r') as file:
+                        file_content = file.read()
+                    file_or_error = (f'Last Modified: {datetime.fromtimestamp(file_last_modified, tz=timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")}\r\n'
+                                     '\r\n'
+                                     f'{file_content}')
+                    return create_response(code, file_or_error)
                     #print('return relevant repsponse for 200 OK')
             else:
-                response="404 Not Found"
-                return
-                #print("return relevant repsponse for 404 Not Found")
+                code="404 Not Found"
+                file_or_error = f'\r\n<html><body><h1>{code}</h1><p>The request could not be understood by the server due to malformed syntax.</p></body></html>'
+                return create_response(code, file_or_error)
 
         else:
-            response="501 Not Implemented"
-            return
-            #print('return relevant repsponse for 501 Not Implemented')
+            code="501 Not Implemented"
+            file_or_error = f'\r\n<html><body><h1>{code}</h1><p>The server does not support the functionality required to fulfill the request.</p></body></html>'
+            return create_response(code, file_or_error)
+            
         
     else:
-        reponse="400 Bad Error"
-        return
-        #return 'return relevant repsponse for 400 Bad Error'
+        code="400 Bad Error"
+        file_or_error = f'\r\n<html><body><h1>{code}</h1><p>The request could not be understood by the server due to malformed syntax.</p></body></html>'
+        return create_response(code, file_or_error)
 
 while True:
     connectionSocket, addr = serverSocket.accept()
