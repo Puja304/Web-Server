@@ -91,7 +91,7 @@ def create_response(code, file_or_error):
 #     # return the response (whatever it was)
 #     return response
 
-def ask_origin_server_or_cache(method, path, headers, host): 
+def ask_origin_server_or_cache(request): 
     # first check if we have url as a key in our cache
     # if yes, return the value associated with it
     # if not, ask contact origin server
@@ -99,7 +99,12 @@ def ask_origin_server_or_cache(method, path, headers, host):
     # return the response (whatever it was)
     # if not path.startswith("http://"):
     #     path = "http://" + path
+    head = request.split('\n')[0]
 
+    method, path, vers = head.split()   # separate sections for further checks
+    path = path.split('/')[3]
+    host = request.split('\n')[1]
+    host = host.split(':')[1]
     # Check if the response is in the cache
     if path in cache:
         print("Cache hit!")
@@ -113,19 +118,20 @@ def ask_origin_server_or_cache(method, path, headers, host):
 
     # Create a socket to connect to the origin server
     with socket(AF_INET, SOCK_STREAM) as proxy_socket:
-        print(f"Connecting to host: {host.strip()}")
+        # print(f"Connecting to host: {host.strip()}")
         try:
             print('Checkpoint 0')
-            print(f'Method: {method}\n Path = {path}\n Headers = {headers}')
+            # print(f'Method: {method}\n Path = {path}\n Headers = {headers}')
             proxy_socket.connect((host.strip(), 80))  # Connect to the host on port 80
-            request_line = (f'{method} {path} HTTP/1.1\r\n'
-                            f'Host: {host}\r\n'
-                            f'{headers}'
-                            'Connection: close\r\n\r\n')
+            # request_line = (f'{method} {path} HTTP/1.1\r\n'
+            #                 f'Host: {host}\r\n'
+            #                 f'{headers}'
+            #                 'Connection: close\r\n\r\n')
             print('Checkpoint 1')
-            print(request_line)
-            proxy_socket.sendall(request_line.encode())
-
+            # print(request_line)
+            # proxy_socket.sendall(request_line.encode())
+            print(request)
+            proxy_socket.sendall(request.encode())
             print('Checkpoint 2')
             response = b""
             print('Checkpoint 3')
@@ -135,14 +141,16 @@ def ask_origin_server_or_cache(method, path, headers, host):
                 if not part:
                     break
                 response += part
-        except:
+                return response
+        except Exception as e:
+            print(e)
             return create_response('404 Not Found', '\r\n<html><body><h1>404 Not Found</h1><p>We cannot find it</p></body></html>')
 
     # Store the response in the cache
     cache[path] = response
     print('Checkpoint 5')
     print(f'Response: {response}')
-    return response
+    # return response
 
 def handle_request(request):
     head = request.split('\n')[0]
@@ -185,8 +193,8 @@ def handle_request(request):
             headers = request.split('\n')[1] # extracting the rest of the header (not request line)
             print(f'Header: {headers}')
             try:
-
-                response = ask_origin_server_or_cache(method,path, vers + headers, host)
+#method,path, vers + headers, host
+                response = ask_origin_server_or_cache(request)
                 #print(response)
                 response = response.decode()
                 # print("Checkpoint 6")
