@@ -91,14 +91,14 @@ def create_response(code, file_or_error):
 #     # return the response (whatever it was)
 #     return response
 
-def ask_origin_server_or_cache(method, path, headers): 
+def ask_origin_server_or_cache(method, path, headers, host): 
     # first check if we have url as a key in our cache
     # if yes, return the value associated with it
     # if not, ask contact origin server
     # if their reposne is successfull (200 Ok),add it to cache
     # return the response (whatever it was)
-    if not path.startswith("http://"):
-        path = "http://" + path
+    # if not path.startswith("http://"):
+    #     path = "http://" + path
 
     # Check if the response is in the cache
     if path in cache:
@@ -107,32 +107,41 @@ def ask_origin_server_or_cache(method, path, headers):
 
     print("Cache miss, querying origin server...")
 
+    if not path:
+        path = '/'
     # Parse the host and path from the URL
-    url_parts = path.split('/', 3)
-    print(path)
-    print(url_parts)
-    host = url_parts[3]
-    print(len(host))
 
     # Create a socket to connect to the origin server
     with socket(AF_INET, SOCK_STREAM) as proxy_socket:
-        print(f"Connecting to host: {host}")
-        proxy_socket.connect((host, 80))  # Connect to the host on port 80
-        request_line = (f'{method} {path} HTTP/1.1\r\n'
-                        f'Host: {host}\r\n'
-                        'Connection: close\r\n\r\n')
-        print(request_line)
-        proxy_socket.sendall(request_line.encode())
+        print(f"Connecting to host: {host.strip()}")
+        try:
+            print('Checkpoint 0')
+            print(f'Method: {method}\n Path = {path}\n Headers = {headers}')
+            proxy_socket.connect((host.strip(), 80))  # Connect to the host on port 80
+            request_line = (f'{method} {path} HTTP/1.1\r\n'
+                            f'Host: {host}\r\n'
+                            f'{headers}'
+                            'Connection: close\r\n\r\n')
+            print('Checkpoint 1')
+            print(request_line)
+            proxy_socket.sendall(request_line.encode())
 
-        response = b""
-        while True:
-            part = proxy_socket.recv(4096)
-            if not part:
-                break
-            response += part
+            print('Checkpoint 2')
+            response = b""
+            print('Checkpoint 3')
+            while True:
+                print('Checkpoint 4')
+                part = proxy_socket.recv(4096)
+                if not part:
+                    break
+                response += part
+        except:
+            return create_response('404 Not Found', '\r\n<html><body><h1>404 Not Found</h1><p>We cannot find it</p></body></html>')
 
     # Store the response in the cache
     cache[path] = response
+    print('Checkpoint 5')
+    print(f'Response: {response}')
     return response
 
 def handle_request(request):
@@ -167,30 +176,36 @@ def handle_request(request):
             # return create_response(code, file_or_error)
             # #print('return relevant repsponse for 200 OK')
 
-            print(request)
             method, path, vers = head.split()   # separate sections for further checks
-            print(path)
-            headers = request.split('\n', 1)[1] # extracting the rest of the header (not request line)
-
+            path = path.split('/')[3]
+            host = request.split('\n')[1]
+            host = host.split(':')[1]
+            # print(f'host = {host}')
+            # print(f'path = {path}')
+            headers = request.split('\n')[1] # extracting the rest of the header (not request line)
+            print(f'Header: {headers}')
             try:
 
-                response = ask_origin_server_or_cache(method,path, vers + headers)
-                print(repr(response))
+                response = ask_origin_server_or_cache(method,path, vers + headers, host)
                 #print(response)
-                responseHead = response.split(b'\r\n\r\n', 1)[0] #get the header in bytes, split at double \r\n\r\n
-                #print(responseHead) 
-                status = responseHead.split(b'\r\n')[0].decode()  # split the header to get the first value i.e. the status code 
-                #print(status)
-                responseBody = response.split(b'\r\n\r\n', 1)[1]  # get the part after the first set of two \r\n\r\n = body
-                #print(responseBody)
-
-                if ("200 OK" in status) or ('404 Not Found' in status) or ('304 Not Modified' in status) :
-                    return response.decode()
-
+                response = response.decode()
+                # print("Checkpoint 6")
+                # responseHead = response.split(b'\r\n\r\n', 1)[0] #get the header in bytes, split at double \r\n\r\n
+                # #print(responseHead) 
+                # print("Checkpoint 7")
+                # status = responseHead.split(b'\r\n')[0].decode()  # split the header to get the first value i.e. the status code 
+                # #print(status)
+                # print("Checkpoint 8")
+                # responseBody = response.split(b'\r\n\r\n', 1)[1]  # get the part after the first set of two \r\n\r\n = body
+                # #print(responseBody)
+                print("Checkpoint 6")
+                # if ("200 OK" in response) or ('404 Not Found' in response) or ('304 Not Modified' in response):
+                #         print(f'Type: {type(response)}')
+                return response
+            
             except Exception as dne:
-                code="400 Bad Request"
-                file_or_error = f'\r\n<html><body><h1>{code}</h1><p>400 Bad Request (Syntax Error)</p></body></html>'
-                return create_response(code, file_or_error)
+                print(dne)
+                return response
 
         else:
             code="501 Not Implemented"
