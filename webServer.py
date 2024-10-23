@@ -7,9 +7,17 @@ methods_valid = ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS', 'PATCH', 'CO
 methods_supported = ['GET', 'POST']
 
 
-#functions
+
+serverPort = 8080
+serverSocket = socket(AF_INET, SOCK_STREAM)
+serverSocket.bind(('',serverPort))
+serverSocket.listen(1)
+
+print('The server is ready to receive')
 
 def is_valid_syntax(head):
+    if(len(head.split()) != 3):
+        return False
     method, path, vers = head.split()
     inMethods = method in methods_valid
     if (inMethods and path and vers.startswith('HTTP/')):
@@ -57,7 +65,6 @@ def ask_origin_server_or_cache(method, path, headers):
 
 
 def handle_request(request):
-
     head = request.split('\n')[0]
 
     if (is_valid_syntax(head)):
@@ -132,7 +139,7 @@ def handle_request(request):
             
         
     else:
-        code="400 Bad Error"
+        code="400 Bad Request"
         file_or_error = f'\r\n<html><body><h1>{code}</h1><p>The request could not be understood by the server due to malformed syntax.</p></body></html>'
         return create_response(code, file_or_error)
 
@@ -156,10 +163,13 @@ print('The server is ready to receive')
 
         
 while True:
-    connectionSocket, addr = serverSocket.accept()  
-    handlingClients = threading.Thread(target=handle_client, args=(connectionSocket,))   # handle multiple connections, each one going into the handle_client function
-    handlingClients.start()   #begin the multi-threaded function
- 
+    connectionSocket, addr = serverSocket.accept()
+    request = connectionSocket.recv(1024).decode()
 
+    response = handle_request(request)
+
+    connectionSocket.send(response.encode())
+
+    connectionSocket.close()
 
     
