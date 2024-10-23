@@ -55,43 +55,85 @@ def create_response(code, file_or_error):
                     ) 
 
 
+# def ask_origin_server_or_cache(method, path, headers): 
+#     # first check if we have url as a key in our cache
+#     if path in cache:
+#         print("Cache Hit")
+#         return cache[path]
+
+#     print("Cache Miss")
+#     host_line = [line for line in headers.split('\n') if line.startswith("Host:")]
+#     if not host_line:
+#         return "HTTP/1.1 400 Bad Request\r\n\r\n"  # Host header is required for HTTP/1.1
+#     hostname  =host_line[0].split()[1]  # Extract hostname from 'Host: ' line
+#     originSocket = socket(AF_INET, SOCK_STREAM)
+
+#     #hostname = path.split('/')[2]
+#     port = 80
+#     if(path):
+#         originSocket.connect(hostname, port)
+#         print(hostname)
+#         originSocket.send(f"{method} {path} HTTP/1.1\r\rHost: {hostname}\r\n\r\n".encode())
+
+#         response = b""
+#         while True: 
+#             part = originSocket.recv(1024)
+#             if not part:
+#                 break
+#             response += part
+
+#         originSocket.close()
+#         cache[path] = response.decode()
+#         return response.decode()
+#     # if yes, return the value associated with it
+#     # if not, ask contact origin server
+#     # if their reposne is successfull (200 Ok),add it to cache
+#     # return the response (whatever it was)
+#     return response
+
 def ask_origin_server_or_cache(method, path, headers): 
     # first check if we have url as a key in our cache
-    if path in cache:
-        print("Cache Hit")
-        return cache[path]
-
-    print("Cache Miss")
-    host_line = [line for line in headers.split('\n') if line.startswith("Host:")]
-    if not host_line:
-        return "HTTP/1.1 400 Bad Request\r\n\r\n"  # Host header is required for HTTP/1.1
-    hostname  =host_line[0].split()[1]  # Extract hostname from 'Host: ' line
-    originSocket = socket(AF_INET, SOCK_STREAM)
-
-    #hostname = path.split('/')[2]
-    port = 80
-    if(path):
-        originSocket.connect(hostname, port)
-        print(hostname)
-        originSocket.send(f"{method} {path} HTTP/1.1\r\rHost: {hostname}\r\n\r\n".encode())
-
-        response = b""
-        while True: 
-            part = originSocket.recv(1024)
-            if not part:
-                break
-            response += part
-
-        originSocket.close()
-        cache[path] = response.decode()
-        return response.decode()
     # if yes, return the value associated with it
     # if not, ask contact origin server
     # if their reposne is successfull (200 Ok),add it to cache
     # return the response (whatever it was)
+    if not path.startswith("http://"):
+        path = "http://" + path
+
+    # Check if the response is in the cache
+    if path in cache:
+        print("Cache hit!")
+        return cache[path]  # Return cached response
+
+    print("Cache miss, querying origin server...")
+
+    # Parse the host and path from the URL
+    url_parts = path.split('/', 3)
+    print(path)
+    print(url_parts)
+    host = url_parts[3]
+    print(len(host))
+
+    # Create a socket to connect to the origin server
+    with socket(AF_INET, SOCK_STREAM) as proxy_socket:
+        print(f"Connecting to host: {host}")
+        proxy_socket.connect((host, 80))  # Connect to the host on port 80
+        request_line = (f'{method} {path} HTTP/1.1\r\n'
+                        f'Host: {host}\r\n'
+                        'Connection: close\r\n\r\n')
+        print(request_line)
+        proxy_socket.sendall(request_line.encode())
+
+        response = b""
+        while True:
+            part = proxy_socket.recv(4096)
+            if not part:
+                break
+            response += part
+
+    # Store the response in the cache
+    cache[path] = response
     return response
-
-
 
 def handle_request(request):
     head = request.split('\n')[0]
