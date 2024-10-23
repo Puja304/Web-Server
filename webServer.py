@@ -5,8 +5,6 @@ from datetime import *
 methods_valid = ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS', 'PATCH', 'CONNECT', 'TRACE']
 methods_supported = ['GET', 'POST']
 
-
-
 serverPort = 8080
 serverSocket = socket(AF_INET, SOCK_STREAM)
 serverSocket.bind(('',serverPort))
@@ -15,6 +13,8 @@ serverSocket.listen(1)
 print('The server is ready to receive')
 
 def is_valid_syntax(head):
+    if(len(head.split()) != 3):
+        return False
     method, path, vers = head.split()
     inMethods = method in methods_valid
     if (inMethods and path and vers.startswith('HTTP/')):
@@ -49,7 +49,6 @@ def create_response(code, file_or_error):
                     ) 
 
 def handle_request(request):
-
     head = request.split('\n')[0]
 
     if (is_valid_syntax(head)):
@@ -90,18 +89,16 @@ def handle_request(request):
             
         
     else:
-        code="400 Bad Error"
+        code="400 Bad Request"
         file_or_error = f'\r\n<html><body><h1>{code}</h1><p>The request could not be understood by the server due to malformed syntax.</p></body></html>'
         return create_response(code, file_or_error)
 
 while True:
     connectionSocket, addr = serverSocket.accept()
-    request = connectionSocket.recv(1024).decode()
+    request = connectionSocket.recv(4096).decode()
 
     response = handle_request(request)
 
     connectionSocket.send(response.encode())
 
     connectionSocket.close()
-
-    
