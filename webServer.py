@@ -11,7 +11,7 @@ methods_supported = ['GET', 'POST']
 serverPort = 8080
 serverSocket = socket(AF_INET, SOCK_STREAM)
 serverSocket.bind(('',serverPort))
-serverSocket.listen(1)
+serverSocket.listen(5)
 
 print('The server is ready to receive')
 
@@ -61,6 +61,7 @@ def ask_origin_server_or_cache(method, path, headers):
     # if not, ask contact origin server
     # if their reposne is successfull (200 Ok),add it to cache
     # return the response (whatever it was)
+    return response
 
 
 
@@ -96,36 +97,24 @@ def handle_request(request):
             # return create_response(code, file_or_error)
             # #print('return relevant repsponse for 200 OK')
 
-            print(head)
+            print(request)
             method, path, vers = head.split()   # separate sections for further checks
             headers = request.split('\n', 1)[1] # extracting the rest of the header (not request line)
 
-            response = ask_origin_server_or_cache(method,path,headers)
-            #print(response)
-            responseHead = response.split(b'\r\n\r\n', 1)[0] #get the header in bytes, split at double \r\n\r\n
-            #print(responseHead) 
-            status = responseHead.split(b'\r\n')[0].decode()  # split the header to get the first value i.e. the status code 
-            #print(status)
-            responseBody = response.split(b'\r\n\r\n', 1)[1]  # get the part after the first set of two \r\n\r\n = body
-            #print(responseBody)
-
-            if "200 OK" in status:
-                code = "200 OK"
-                file_or_error = responseBody.decode()
-                return create_response(code, file_or_error)
-            elif "404 Not Found" in status:
-                code = "404 Not Found"
-                file_or_error = responseBody.decode()
-                return create_response(code, file_or_error)
-            elif "304 Not Modified" in status:
-                code = "304 Not Modified"
-                file_or_error = responseBody.decode()
-            else:  # whatever the case may be 
-                code = status
-                file_or_error = responseBody.decode()
-                return create_response(code, file_or_error)
             try:
-                return 5
+
+                response = ask_origin_server_or_cache(method,path, vers + headers)
+                print(repr(response))
+                #print(response)
+                responseHead = response.split(b'\r\n\r\n', 1)[0] #get the header in bytes, split at double \r\n\r\n
+                #print(responseHead) 
+                status = responseHead.split(b'\r\n')[0].decode()  # split the header to get the first value i.e. the status code 
+                #print(status)
+                responseBody = response.split(b'\r\n\r\n', 1)[1]  # get the part after the first set of two \r\n\r\n = body
+                #print(responseBody)
+
+                if ("200 OK" in status) or ('404 Not Found' in status) or ('304 Not Modified' in status) :
+                    return response.decode()
 
             except Exception as dne:
                 code="400 Bad Request"
