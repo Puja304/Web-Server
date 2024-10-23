@@ -6,12 +6,12 @@ import threading
 methods_valid = ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS', 'PATCH', 'CONNECT', 'TRACE']
 methods_supported = ['GET', 'POST']
 
+cache = {}  #a dictionary that will cache responses. 
 
-
-serverPort = 8080
-serverSocket = socket(AF_INET, SOCK_STREAM)
-serverSocket.bind(('',serverPort))
-serverSocket.listen(1)
+# serverPort = 8080
+# serverSocket = socket(AF_INET, SOCK_STREAM)
+# serverSocket.bind(('',serverPort))
+# serverSocket.listen(1)
 
 print('The server is ready to receive')
 
@@ -57,6 +57,33 @@ def create_response(code, file_or_error):
 
 def ask_origin_server_or_cache(method, path, headers): 
     # first check if we have url as a key in our cache
+    if path in cache:
+        print("Cache Hit")
+        return cache[path]
+
+    print("Cache Miss")
+    host_line = [line for line in headers.split('\n') if line.startswith("Host:")]
+    if not host_line:
+        return "HTTP/1.1 400 Bad Request\r\n\r\n"  # Host header is required for HTTP/1.1
+    hostname  =host_line[0].split()[1]  # Extract hostname from 'Host: ' line
+    originSocket = socket(AF_INET, SOCK_STREAM)
+
+    #hostname = path.split('/')[2]
+    port = 80
+    if(path):
+        originSocket.connect(hostname, port)
+        originSocket.send(f"{method} {path} HTTP/1.1\r\rHost: {hostname}\r\n\r\n".encode())
+
+        response = b""
+        while True: 
+            part = originSocket.recv(1024)
+            if not part:
+                break
+            response += part
+
+        originSocket.close()
+        cache[path] = response.decode()
+        return response.decode()
     # if yes, return the value associated with it
     # if not, ask contact origin server
     # if their reposne is successfull (200 Ok),add it to cache
@@ -141,35 +168,32 @@ def handle_request(request):
     else:
         code="400 Bad Request"
         file_or_error = f'\r\n<html><body><h1>{code}</h1><p>The request could not be understood by the server due to malformed syntax.</p></body></html>'
-        return create_response(code, file_or_error)
+        return create_response(code, file_or_error)\
 
 
 def handle_client(client_socket):
-    request = client_socket.recv(1024).decode()   #receive request
-    response = handle_request(request)         #handle it
-    connectionSocket.send(response.encode())   #return response 
-    connectionSocket.close()                      #close the connection
-
-
-
-cache = {}  #a dictionary that will cache responses. 
-
-serverPort = 8080
-serverSocket = socket(AF_INET, SOCK_STREAM)
-serverSocket.bind(('',serverPort))
-serverSocket.listen(5)  #maximum 5 connections at a time
-
-print('The server is ready to receive')
-
-        
-while True:
-    connectionSocket, addr = serverSocket.accept()
-    request = connectionSocket.recv(1024).decode()
-
+    request = client_socket.recv(1024).decode()
     response = handle_request(request)
+    client_socket.send(response.encode()) 
+    client_socket.close()
 
-    connectionSocket.send(response.encode())
+def start_server():
+    serverPort = 8081
+    serverSocket = socket(AF_INET, SOCK_STREAM)
+    serverSocket.bind(('',serverPort))
+    serverSocket.listen(5)  #maximum 5 connections at a time
 
-    connectionSocket.close()
+    while True:
+        connectionSocket, addr = serverSocket.accept()
+        #request = connectionSocket.recv(1024).decode()
 
-    
+        connection_handler = threading.Thread(target=handle_client, args=(connectionSocket,))
+        connection_handler.start()
+        #response = handle_request(request)
+
+        #connectionSocket.send(response.encode())
+
+        #connectionSocket.close()
+
+if __name__ == "__main__":
+    start_server()
