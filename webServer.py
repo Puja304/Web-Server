@@ -72,6 +72,7 @@ def ask_origin_server_or_cache(method, path, headers):
     port = 80
     if(path):
         originSocket.connect(hostname, port)
+        print(hostname)
         originSocket.send(f"{method} {path} HTTP/1.1\r\rHost: {hostname}\r\n\r\n".encode())
 
         response = b""
@@ -126,6 +127,7 @@ def handle_request(request):
 
             print(request)
             method, path, vers = head.split()   # separate sections for further checks
+            print(path)
             headers = request.split('\n', 1)[1] # extracting the rest of the header (not request line)
 
             try:
@@ -157,7 +159,7 @@ def handle_request(request):
     else:
         code="400 Bad Request"
         file_or_error = f'\r\n<html><body><h1>{code}</h1><p>The request could not be understood by the server due to malformed syntax.</p></body></html>'
-        return create_response(code, file_or_error)\
+        return create_response(code, file_or_error)
 
 
 def handle_client(client_socket):
@@ -166,23 +168,20 @@ def handle_client(client_socket):
     client_socket.send(response.encode()) 
     client_socket.close()
 
-def start_server():
-    serverPort = 8081
-    serverSocket = socket(AF_INET, SOCK_STREAM)
-    serverSocket.bind(('',serverPort))
-    serverSocket.listen(5)  #maximum 5 connections at a time
 
-    while True:
-        connectionSocket, addr = serverSocket.accept()
-        #request = connectionSocket.recv(1024).decode()
+serverPort = 8080
+serverSocket = socket(AF_INET, SOCK_STREAM)
+serverSocket.bind(('',serverPort))
+serverSocket.listen(5)  #maximum 5 connections at a time
 
-        connection_handler = threading.Thread(target=handle_client, args=(connectionSocket,))
-        connection_handler.start()
-        #response = handle_request(request)
+while True:
+    connectionSocket, addr = serverSocket.accept()
+    #request = connectionSocket.recv(1024).decode()
 
-        #connectionSocket.send(response.encode())
+    connection_handler = threading.Thread(target=handle_client, args=(connectionSocket,))
+    connection_handler.start()
+    #response = handle_request(request)
 
-        #connectionSocket.close()
+    #connectionSocket.send(response.encode())
 
-if __name__ == "__main__":
-    start_server()
+    #connectionSocket.close()
