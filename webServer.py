@@ -3,8 +3,9 @@ import os
 from datetime import *
 import threading
 
+# will be used for syntax check for 400 bad request
 methods_valid = ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS', 'PATCH', 'CONNECT', 'TRACE']
-methods_supported = ['GET', 'POST']
+methods_supported = ['GET']
 
 cache = {}  #a dictionary that will cache responses. 
 
@@ -13,8 +14,8 @@ cache = {}  #a dictionary that will cache responses.
 # serverSocket.bind(('',serverPort))
 # serverSocket.listen(5)
 
-print('The server is ready to receive')
 
+# checks for method validity and syntax validity
 def is_valid_syntax(head):
     if(len(head.split()) != 3):
         return False
@@ -25,8 +26,10 @@ def is_valid_syntax(head):
     else:
         return False            
 
+#checks for method compatibality. must have passed is_valid_syntax before reaching here
 def is_supported(head):
     method = head.split()[0]
+    print(f'Method: {method}')
     if method in methods_supported:
         return True
     else:
@@ -48,10 +51,12 @@ def is_supported(head):
 #     else:
 #         return False
     
+#creates a basic response for status codes that we generate
 def create_response(code, file_or_error):
     return (f'HTTP/1.1 {code}\r\n'
                     'Content-Type: text/html\r\n'
                     f'{file_or_error}'
+                    '\r\n\r\n'
                     ) 
 
 
@@ -97,22 +102,56 @@ def ask_origin_server_or_cache(request):
     # if not, ask contact origin server
     # if their reposne is successfull (200 Ok),add it to cache
     # return the response (whatever it was)
-    # if not path.startswith("http://"):
-    #     path = "http://" + path
     head = request.split('\n')[0]
 
+    # find components of request
     method, path, vers = head.split()   # separate sections for further checks
-    path = path.split('/')[3]
+    print(path)
+    # determine name of host to connect with
     host = request.split('\n')[1]
     host = host.split(':')[1]
     # Check if the response is in the cache
     if path in cache:
         print("Cache hit!")
-        return cache[path]  # Return cached response
+        # if they have if-modified-since, we compare it to our cached response to see if we should send that one or get a new one
+        if 'If-Modified-Since' in request:
+            lines = request.split('\n')
+            requested_date = ''
+            for line in lines:
+                if line.startswith('If-Modified-Since'):
+                    print(f'The Line is:  {line}')
+                    requested_date = line.split(':', 1)[1].strip()
+                    print(f'requested_date = {requested_date}')
+            previous = cache[path].split('\n')
+            last_modified = ''
+
+            print(f'Cached response: {cache[path]}')
+            for line in previous:
+                if line.startswith('Last-Modified') or line.startswith('Date'):
+                    print(f'The Line is:  {line}')
+                    last_modified = line.split(':', 1)[1].strip()
+
+            if requested_date and last_modified:  # Ensure both dates are not empty
+                # Convert the date strings to datetime objects
+                requested_datetime = datetime.strptime(requested_date, '%a, %d %b %Y %H:%M:%S GMT')
+                last_modified_datetime = datetime.strptime(last_modified, '%a, %d %b %Y %H:%M:%S GMT')
+
+                # Compare the dates
+                if requested_datetime < last_modified_datetime:
+                    # Requested date is older than the last modified date
+                    code="304 Not Modified"
+                    return create_response(code, '')
+                else:
+                    print("Must request origin")
+                    # Requested date is newer or the same, so we continue on to the normal step of requesting from original server
+            
+        else:
+            return cache[path].encode()  # Return cached response
 
     print("Cache miss, querying origin server...")
 
     if not path:
+        # default path when not mentioned
         path = '/'
     # Parse the host and path from the URL
 
@@ -131,24 +170,43 @@ def ask_origin_server_or_cache(request):
             # print(request_line)
             # proxy_socket.sendall(request_line.encode())
             print(request)
-            proxy_socket.sendall(request.encode())
+            #making sure we remove the connection header from our proxy request
+            if('Connection' in request):
+                lines = request.splitlines()
+                # Create a new list without the 'Connection' header
+                filtered_lines = [line for line in lines if not (line.startswith("Connection:") or line.startswith('Proxy-Connection'))]
+                # Join the filtered lines back into a single string
+                modified_request = "\r\n".join(filtered_lines)
+                modified_request = modified_request + '\r\n'
+                print(f'Modified Request: {modified_request}')
+
+            # send the rest of the request as is
+            proxy_socket.sendall(modified_request.encode())
             print('Checkpoint 2')
             response = b""
             print('Checkpoint 3')
             while True:
                 print('Checkpoint 4')
+                # receive the response
                 part = proxy_socket.recv(4096)
+                print('Checkpoint 5')
                 if not part:
                     break
                 response += part
+                # only cache it if it's 200 OK
+                if '200 OK' in response.decode():
+                    cache[path] = response.decode()
+                
+                #return the response
                 return response
+            # if there is an error connecting (invalid host name, etc) then we give a 404 Not Found error
         except Exception as e:
             print(e)
             return create_response('404 Not Found', '\r\n<html><body><h1>404 Not Found</h1><p>We cannot find it</p></body></html>')
 
     # Store the response in the cache
-    cache[path] = response
     print('Checkpoint 5')
+    # printing for debugging purposes
     print(f'Response: {response}')
     # return response
 
@@ -184,14 +242,14 @@ def handle_request(request):
             # return create_response(code, file_or_error)
             # #print('return relevant repsponse for 200 OK')
 
-            method, path, vers = head.split()   # separate sections for further checks
-            path = path.split('/')[3]
-            host = request.split('\n')[1]
-            host = host.split(':')[1]
-            # print(f'host = {host}')
-            # print(f'path = {path}')
-            headers = request.split('\n')[1] # extracting the rest of the header (not request line)
-            print(f'Header: {headers}')
+            # method, path, vers = head.split()   # separate sections for further checks
+            # path = path.split('/')[2]
+            # host = request.split('\n')[1]
+            # host = host.split(':')[1]
+            # # print(f'host = {host}')
+            # # print(f'path = {path}')
+            # headers = request.split('\n')[1] # extracting the rest of the header (not request line)
+            # print(f'Header: {headers}')
             try:
 #method,path, vers + headers, host
                 response = ask_origin_server_or_cache(request)
@@ -213,6 +271,7 @@ def handle_request(request):
             
             except Exception as dne:
                 print(dne)
+                # if there is an error, return it. error only occurs when it sends our own 404 or 304 response, in which case we handle it in handle_client
                 return response
 
         else:
@@ -228,16 +287,28 @@ def handle_request(request):
 
 
 def handle_client(client_socket):
-    request = client_socket.recv(1024).decode()
-    response = handle_request(request)
-    client_socket.send(response.encode()) 
+    # keeps us connected for for multiple requests
+    while True:
+        try:
+            request = client_socket.recv(1024).decode()
+            if not request:  # If the client has disconnected
+                print("Client disconnected.")
+                break
+            
+            response = handle_request(request)
+            client_socket.send(response.encode())
+        except Exception as e:
+            print(f"Error handling request: {e}")
+            break
+    
     client_socket.close()
-
 
 serverPort = 8080
 serverSocket = socket(AF_INET, SOCK_STREAM)
-serverSocket.bind(('',serverPort))
-serverSocket.listen(5)  #maximum 5 connections at a time
+serverSocket.bind(('', serverPort))
+serverSocket.listen(5)  # Maximum 5 connections
+
+print('The server is ready to receive')
 
 while True:
     connectionSocket, addr = serverSocket.accept()
