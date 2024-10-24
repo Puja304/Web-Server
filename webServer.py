@@ -55,6 +55,7 @@ def is_supported(head):
 def create_response(code, file_or_error):
     return (f'HTTP/1.1 {code}\r\n'
                     'Content-Type: text/html\r\n'
+                    'Connection: keep-alive\r\n'
                     f'{file_or_error}'
                     '\r\n\r\n'
                     ) 
@@ -292,7 +293,6 @@ def handle_client(client_socket):
         try:
             request = client_socket.recv(1024).decode()
             if not request:  # If the client has disconnected
-                print("Client disconnected.")
                 break
             
             response = handle_request(request)
