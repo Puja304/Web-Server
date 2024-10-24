@@ -60,43 +60,6 @@ def create_response(code, file_or_error):
                     '\r\n\r\n'
                     ) 
 
-
-# def ask_origin_server_or_cache(method, path, headers): 
-#     # first check if we have url as a key in our cache
-#     if path in cache:
-#         print("Cache Hit")
-#         return cache[path]
-
-#     print("Cache Miss")
-#     host_line = [line for line in headers.split('\n') if line.startswith("Host:")]
-#     if not host_line:
-#         return "HTTP/1.1 400 Bad Request\r\n\r\n"  # Host header is required for HTTP/1.1
-#     hostname  =host_line[0].split()[1]  # Extract hostname from 'Host: ' line
-#     originSocket = socket(AF_INET, SOCK_STREAM)
-
-#     #hostname = path.split('/')[2]
-#     port = 80
-#     if(path):
-#         originSocket.connect(hostname, port)
-#         print(hostname)
-#         originSocket.send(f"{method} {path} HTTP/1.1\r\rHost: {hostname}\r\n\r\n".encode())
-
-#         response = b""
-#         while True: 
-#             part = originSocket.recv(1024)
-#             if not part:
-#                 break
-#             response += part
-
-#         originSocket.close()
-#         cache[path] = response.decode()
-#         return response.decode()
-#     # if yes, return the value associated with it
-#     # if not, ask contact origin server
-#     # if their reposne is successfull (200 Ok),add it to cache
-#     # return the response (whatever it was)
-#     return response
-
 def ask_origin_server_or_cache(request): 
     # first check if we have url as a key in our cache
     # if yes, return the value associated with it
